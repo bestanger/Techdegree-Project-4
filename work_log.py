@@ -20,55 +20,57 @@ class Entry(Model):
     class Meta():
         database = db
 
-def check_date(date):
-    # try date, and if valid add to entry data
-    try:
-        datetime.datetime.strptime(date, '%Y-%m-%d')
-        return date
-    except ValueError as err:
-        print(err)
-    except TypeError as err:
-        print(err)
-
 def check_emp_task(data):
+    """Throws an error if there is no employee or task name"""
     if data == '' or None:
-        raise ValueError('Must give an employee or task')
+        raise ValueError('Must give input')
     else:
         return data
 
-def check_data(data):
-    # try data, and if valid add to entry data
-    try:
-        check_emp_task(data)
-        return data
-    except ValueError as err:
-        print(err)
+def check_data(data, date, num):
+    """Checks either a date, duration, employee or task name"""
+    if num:
+        try:
+            data = int(data)
+            return data
+        except ValueError as err:
+            print(err)
+    elif date:
+        try:
+            datetime.datetime.strptime(data, '%Y-%m-%d')
+            return data
+        except ValueError as err:
+            print(err)
+        except TypeError as err:
+            print(err)
+    else:
+        try:
+            check_emp_task(data)
+            return data
+        except ValueError as err:
+            print(err)
+
+def loop_data(data, str, date, num):
+    """Recurses until a valid input is received"""
+    data = check_data(data, date, num)
+    while not data:
+        data = loop_data(input(str), str, date, num)
+    return data
 
 def get_data():
     """get data for an entry"""
     data = []
-    name = check_data(input('Employee: '))
-    while not name:
-        name = check_data(input('Employee: '))
+    name = loop_data(input('Employee: '), 'Employee: ', False, False)
     data.append(name)
-    task = check_data(input('Task Name: '))
-    while not task:
-        task = check_data(input('Task Name: '))
+    task = loop_data(input('Task Name: '), 'Task Name: ', False, False)
     data.append(task)
-    while True:
-        try:
-            time = int(input('Time Spent (in min): '))
-            break
-        except ValueError as err:
-            print(err)
-    data.append(time)
+    dur = loop_data(input('Duration (in min): '), 'Duration (in min): ', False, False)
+    data.append(dur)
     data.append(
         input('Input notes here (optional). Press enter to continue. \n>>> '))
 
     if input("Use a date besides today's? [N][y]: ").lower() == 'y':
-        date = check_date(input('Input date in format YYYY-MM-DD: '))
-        while not date:
-            date = check_date(input('Input date in format YYYY-MM-DD: '))
+        date = loop_data(input('Input date in format YYYY-MM-DD: '), 'Input date in format YYYY-MM-DD: ', True, False)
         data.append(date)
     else:
         data.append(datetime.date.today())
@@ -79,7 +81,6 @@ def add_entry(*args):
     """create an entry"""
     Entry.create(employee=args[0], task=args[1], 
                 time=args[2], note=args[3], timestamp = args[4])
-    return True
 
 def display_entries(entries):
     """Shows the contents of the query results"""
@@ -92,49 +93,36 @@ def display_entries(entries):
         print('DURATION: {} min\n'.format(entry.time))
         print('NOTES: {}\n'.format(entry.note))
         input('ANY KEY TO CONTINUE > ')
+    if entries:
+        return True
+    return False
 
 # search functions available
 def search_employee(name):
     """Employee name search"""
     entries = Entry.select().where(Entry.employee == name)
-    display_entries(entries)
-    if entries:
-        return len(entries)
-    return False
+    return entries
 
 def search_date(date):
     """Timestamp search"""
     entries = Entry.select().where(Entry.timestamp == date)
-    display_entries(entries)
-    if entries:
-        return len(entries)
-    return False
+    return entries
 
 def search_time(time):
     """Duration search"""
     entries = Entry.select().where(Entry.time == time)
-    display_entries(entries)
-    if entries:
-        return len(entries)
-    return False
+    return entries
 
 def search_term(term):
     """Keyword search"""
-    entries = Entry.select().where(Entry.task.contains(term) 
-                                or Entry.note.contains(term))
-    display_entries(entries)
-    if entries:
-        return len(entries)
-    return False
+    entries = Entry.select().where(
+        Entry.task.contains(term) | Entry.note.contains(term))
+    return entries
 
 def range_search(date1, date2):
     """Date range search"""
-    entries = Entry.select().order_by(Entry.timestamp.asc())
-    entries = entries.select().where(Entry.timestamp.between(date1, date2))
-    display_entries(entries)
-    if entries:
-        return len(entries)
-    return False
+    entries = Entry.select().where(Entry.timestamp.between(date1, date2))
+    return entries
 
 def menu_loop():
     """Loop through menu until quit"""
@@ -151,22 +139,19 @@ def menu_loop():
         if choice == 'a':
             add_entry(*get_data())
         elif choice =='e':
-            search_employee(input('Employee: '))
+            display_entries(search_employee(input('Employee: ')))
         elif choice == 't' or choice == 'r':
-            date1 = check_date(input('Date (YYYY-MM-DD): '))
-            while not date1:
-                date1 = check_date(input('Date (YYYY-MM-DD): '))
+            date1 = loop_data(input('Date (YYYY-MM-DD): '), 'Date (YYYY-MM-DD): ', True, False)
             if choice == 't':
-                search_date(date1)
+                display_entries(search_date(date1))
             elif choice == 'r':
-                date2 = check_date(input('End Date (YYYY-MM-DD): '))
-                while not date2:
-                    date2 = check_date(input('2nd Date (YYYY-MM-DD): '))
-                range_search(date1, date2)
+                date2 = loop_data(input('End Date (YYYY-MM-DD): '), 'End Date (YYYY-MM-DD): ', True, False)
+                display_entries(range_search(date1, date2))
         elif choice == 'd':
-            search_time(input('Duration: '))
+            dur = loop_data(input('Duration (in min): '), 'Duration (in min): ', False, True)
+            display_entries(search_time(dur))
         elif choice == 'k':
-            search_term(input('Keyword: '))
+            display_entries(search_term(input('Keyword: ')))
         elif choice == 'q':
             return True
 
